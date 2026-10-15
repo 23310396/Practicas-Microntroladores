@@ -1,0 +1,87 @@
+{
+   "widgets": [
+      {
+         "type": "chart",
+         "gridPos": {
+            "h": 8,
+            "w": 12,
+            "x": 0,
+            "y": 0
+         },
+         "series": [
+            {
+               "name": "RPM_Objetivo",
+               "sourceNames": [
+                  "RPM_Objetivo"
+               ],
+               "formula": "",
+               "options": {
+                  "_serie": "RPM_Objetivo",
+                  "_id": "data-serie-32",
+                  "stroke": "rgba(231,76,60,1)",
+                  "fill": "rgba(231,76,60,0.1)"
+               },
+               "unit": "RPM",
+               "type": "number"
+            },
+            {
+               "name": "RPM_Real",
+               "sourceNames": [
+                  "RPM_Real"
+               ],
+               "formula": "",
+               "options": {
+                  "_serie": "RPM_Real",
+                  "_id": "data-serie-36",
+                  "stroke": "rgba(52,152,219,1)",
+                  "fill": "rgba(52,152,219,0.1)"
+               },
+               "unit": "RPM",
+               "type": "number"
+            },
+            {
+               "name": "RPM_Filtrada",
+               "sourceNames": [
+                  "RPM_Filtrada"
+               ],
+               "formula": "",
+               "options": {
+                  "_serie": "RPM_Filtrada",
+                  "_id": "data-serie-37",
+                  "stroke": "rgba(46,204,113,1)",
+                  "fill": "rgba(46,204,113,0.1)"
+               },
+               "unit": "RPM",
+               "type": "number"
+            }
+         ]
+      },
+      {
+         "type": "chart",
+         "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 0
+         },
+         "series": [
+            {
+               "name": "Aceleracion_RPM_s",
+               "sourceNames": [
+                  "Aceleracion_RPM_s"
+               ],
+               "formula": "",
+               "options": {
+                  "_serie": "Aceleracion_RPM_s",
+                  "_id": "data-serie-35",
+                  "stroke": "rgba(231,76,60,1)",
+                  "fill": "rgba(231,76,60,0.1)"
+               },
+               "unit": "RPM/s",
+               "type": "number"
+            }
+         ]
+      }
+   ],
+   "viewDuration": 15
+}
