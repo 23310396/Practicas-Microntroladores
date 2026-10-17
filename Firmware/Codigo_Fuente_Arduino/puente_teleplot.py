@@ -23,6 +23,7 @@ VARIABLES = {
     "RPM_Real": "RPM",
     "RPM_Filtrada": "RPM",
     "PWM_Aplicado": "PWM",
+    "Corriente_Motor_A": "A",
     "Aceleracion_RPM_s": "RPM/s",
 }
 

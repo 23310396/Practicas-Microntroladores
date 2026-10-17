@@ -1,3 +1,4 @@
+
 #include <Arduino.h>
 #include <EEPROM.h>
 #include <math.h>
@@ -12,6 +13,7 @@ const byte IN1 = 8;
 const byte IN2 = 9;
 const byte ENC_A = 2;
 const byte ENC_B = 3;
+const byte PIN_CORRIENTE = A1;
 
 // Cambiar a 1 para transmitir diagnosticos adicionales del encoder.
 // En 0 solo se transmiten las variables principales del motor.
@@ -258,6 +260,101 @@ unsigned long repetidasAnterioresRPM = 0;
 
 unsigned long ultimoControlRPM = 0;
 unsigned long ultimoPulso = 0;
+
+// ----------
+// SENSOR DE CORRIENTE ACS712
+
+// ACS712 de 5 A: sensibilidad nominal 185 mV/A a 5 V.
+// El ADC del Arduino utiliza la alimentacion de 5 V como referencia.
+const float AMPERIOS_POR_CUENTA =
+  5.0f / (1023.0f * 0.185f);
+const unsigned long MUESTREO_CORRIENTE_US = 1250UL;
+
+// Se conserva el cero fraccionario para no redondear el offset del sensor.
+float ceroCorrienteADC = 512.0f;
+float ruidoReposoADC = 0.0f;
+unsigned long sumaLecturasCorrienteADC = 0;
+unsigned int muestrasCorriente = 0;
+unsigned long ultimoMuestreoCorrienteUs = 0;
+unsigned long ultimaVentanaCorrienteMs = 0;
+float corrienteMotorA = 0.0f;
+
+void calibrarCeroCorriente() {
+  // Calibrar con el motor detenido, sin corriente por el sensor.
+  delay(250);
+
+  const unsigned int N = 300;
+  float media = 0.0f;
+  float sumaCuadrados = 0.0f;
+
+  // Algoritmo de Welford: media del cero y ruido en reposo (sigma).
+  for (unsigned int i = 1; i <= N; i++) {
+    float lectura = (float)analogRead(PIN_CORRIENTE);
+    float diferencia = lectura - media;
+    media += diferencia / (float)i;
+    sumaCuadrados += diferencia * (lectura - media);
+    delay(1);
+  }
+
+  ceroCorrienteADC = media;
+  ruidoReposoADC = sqrt(sumaCuadrados / (float)(N - 1));
+  ultimoMuestreoCorrienteUs = micros();
+  ultimaVentanaCorrienteMs = millis();
+  sumaLecturasCorrienteADC = 0;
+  muestrasCorriente = 0;
+  corrienteMotorA = 0.0f;
+
+  Serial.print(F("ACS712 CERO ADC: "));
+  Serial.println(ceroCorrienteADC, 2);
+  Serial.print(F("ACS712 RUIDO REPOSO ADC (sigma): "));
+  Serial.println(ruidoReposoADC, 2);
+
+  if (ceroCorrienteADC < 400.0f || ceroCorrienteADC > 625.0f) {
+    Serial.println(F("AVISO: REVISAR ACS712 Y ALIMENTACION 5V"));
+  }
+  if (ruidoReposoADC > 2.0f) {
+    Serial.println(F("AVISO: RUIDO ALTO EN ACS712; REVISAR CABLEADO"));
+  }
+}
+
+void actualizarCorriente() {
+  // Medicion informativa; no interviene en el PI ni en las protecciones.
+  if (modo == PARADO || modo == CALIBRACION_PAUSADA) {
+    sumaLecturasCorrienteADC = 0;
+    muestrasCorriente = 0;
+    corrienteMotorA = 0.0f;
+    ultimoMuestreoCorrienteUs = micros();
+    ultimaVentanaCorrienteMs = millis();
+    return;
+  }
+
+  unsigned long ahoraUs = micros();
+  if (ahoraUs - ultimoMuestreoCorrienteUs >= MUESTREO_CORRIENTE_US) {
+    ultimoMuestreoCorrienteUs = ahoraUs;
+    // Sumar lecturas sin valor absoluto para que el ruido pueda cancelarse.
+    sumaLecturasCorrienteADC += (unsigned long)analogRead(PIN_CORRIENTE);
+    muestrasCorriente++;
+  }
+
+  unsigned long ahoraMs = millis();
+  if (ahoraMs - ultimaVentanaCorrienteMs >= CONTROL_MS) {
+    if (muestrasCorriente > 0) {
+      // Magnitud de la corriente media CON SIGNO de la ventana.
+      // No es RMS, pico de arranque ni media de magnitudes instantaneas.
+      float mediaADC =
+        sumaLecturasCorrienteADC / (float)muestrasCorriente;
+      float corrienteFirmada =
+        (mediaADC - ceroCorrienteADC) * AMPERIOS_POR_CUENTA;
+      corrienteMotorA = fabs(corrienteFirmada);
+    } else {
+      corrienteMotorA = 0.0f;
+    }
+
+    sumaLecturasCorrienteADC = 0;
+    muestrasCorriente = 0;
+    ultimaVentanaCorrienteMs = ahoraMs;
+  }
+}
 
 // ----------
 // NUEVE PERFILES MATEMATICOS
@@ -1318,6 +1415,7 @@ void setup() {
 
   pinMode(ENC_A, INPUT_PULLUP);
   pinMode(ENC_B, INPUT_PULLUP);
+  pinMode(PIN_CORRIENTE, INPUT);
 
   // Inicializar estado A/B antes de habilitar interrupciones.
   // Requiere Arduino Uno (D2/INT0 y D3/INT1).
@@ -1341,6 +1439,8 @@ void setup() {
   // sin mostrar los datos
 
   cargarCalibracion();
+
+  calibrarCeroCorriente();
 
   randomSeed(
     analogRead(A0)
@@ -1379,6 +1479,9 @@ void loop() {
       indiceEntrada = 0;
     }
   }
+
+  // El muestreo analogico se reparte entre vueltas del loop.
+  actualizarCorriente();
 
   unsigned long ahora = millis();
 
@@ -1797,6 +1900,10 @@ void loop() {
       Serial.print(F(">PWM_Aplicado:"));
 
       Serial.println(pwmAplicado);
+
+      Serial.print(F(">Corriente_Motor_A:"));
+
+      Serial.println(corrienteMotorA, 3);
 
       // Enviar las mediciones ampliadas solo si se habilita el diagnostico.
       if (DIAGNOSTICO_ENCODER == 1) {
